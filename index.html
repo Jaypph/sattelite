@@ -14,8 +14,12 @@ body { margin:0; background:black; font-family:"Courier New",monospace; display:
 #map { width:60%; position:relative; background:radial-gradient(circle at center,#001a33,#000); }
 #earth { position:absolute; width:300px; height:300px; border-radius:50%; background:radial-gradient(circle,#003366,#000); top:50%; left:50%; transform:translate(-50%,-50%); box-shadow:0 0 40px #00ff88; }
 
-.satellite { position:absolute; width:8px; height:8px; border-radius:50%; background:#00ff88; box-shadow:0 0 10px #00ff88;}
-.label { position:absolute; font-size:10px; color:#00ff88;}
+.satellite {
+  z-index: 10;
+}
+.label {
+  z-index: 10;
+}
 .line-to-earth { position:absolute; width:1px; background:rgba(0,255,0,0.3); transform-origin:top left;}
 </style>
 </head>
@@ -84,24 +88,38 @@ async function loadSatellites(){
   let res = await fetch("https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json");
   let data = await res.json();
 
-  // vælg kun nogle få (performance)
-  data.slice(0, 25).forEach(sat=>{
-    let satrec = satellite.twoline2satrec(sat.TLE_LINE1, sat.TLE_LINE2);
+  data.slice(0, 20).forEach(sat=>{
+    if(!sat.TLE_LINE1 || !sat.TLE_LINE2) return;
 
-    let el = document.createElement("div");
-    el.className="satellite";
-    map.appendChild(el);
+    try {
+      let satrec = satellite.twoline2satrec(sat.TLE_LINE1, sat.TLE_LINE2);
 
-    let label = document.createElement("div");
-    label.className="label";
-    map.appendChild(label);
+      let el = document.createElement("div");
+      el.className="satellite";
+      map.appendChild(el);
 
-    sats.push({satrec, el, label, name:sat.OBJECT_NAME});
+      let label = document.createElement("div");
+      label.className="label";
+      map.appendChild(label);
+
+      sats.push({
+        satrec,
+        el,
+        label,
+        name: sat.OBJECT_NAME || "SAT"
+      });
+
+    } catch(e){
+      console.log("Skipping bad satellite");
+    }
   });
 }
 
 function updateSatellites(){
   let now = new Date();
+
+  const centerX = map.offsetWidth / 2;
+  const centerY = map.offsetHeight / 2;
 
   sats.forEach(s=>{
     let posVel = satellite.propagate(s.satrec, now);
@@ -113,15 +131,19 @@ function updateSatellites(){
     let lat = satellite.degreesLat(geo.latitude);
     let lon = satellite.degreesLong(geo.longitude);
 
-    // map til skærm
-    let x = (lon + 180) / 360 * map.offsetWidth;
-    let y = (90 - lat) / 180 * map.offsetHeight;
+    // 🛰️ PRO FIX: brug lon som orbit-vinkel
+    let angle = lon * Math.PI / 180;
+
+    let radius = 200 + (lat * 0.5); // variation
+
+    let x = centerX + Math.cos(angle) * radius;
+    let y = centerY + Math.sin(angle) * radius;
 
     s.el.style.left = x + "px";
     s.el.style.top = y + "px";
 
-    s.label.style.left = (x+10)+"px";
-    s.label.style.top = y+"px";
+    s.label.style.left = (x + 10) + "px";
+    s.label.style.top = y + "px";
     s.label.textContent = s.name;
   });
 
