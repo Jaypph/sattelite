@@ -2,128 +2,134 @@
 <html lang="da">
 <head>
 <meta charset="UTF-8">
-<title>KSC Mission Control Multi-Tracking</title>
+<title>Mission Control - Live Satellites</title>
+
+<script src="https://unpkg.com/satellite.js@5.0.1/dist/satellite.min.js"></script>
+
 <style>
 body { margin:0; background:black; font-family:"Courier New",monospace; display:flex; height:100vh; overflow:hidden;}
 #terminal { width:40%; padding:20px; overflow-y:auto; font-size:14px; color:#00ff00; border-right:2px solid #00ff00;}
 .line::before { content:"root@ksc:~$ "; }
-.blink{animation:blink 1s infinite;} @keyframes blink{50%{opacity:0;}}
 
-#map { width:60%; position:relative; background:radial-gradient(circle at center,#001a33,#000); overflow:hidden; }
+#map { width:60%; position:relative; background:radial-gradient(circle at center,#001a33,#000); }
 #earth { position:absolute; width:300px; height:300px; border-radius:50%; background:radial-gradient(circle,#003366,#000); top:50%; left:50%; transform:translate(-50%,-50%); box-shadow:0 0 40px #00ff88; }
 
-.radar { position:absolute; width:2px; height:100%; background:rgba(0,255,0,0.2); top:0; left:50%; transform-origin:bottom center; animation:sweep 3s linear infinite; }
-@keyframes sweep{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
-
-.satellite { position:absolute; width:10px; height:10px; border-radius:50%; background:#00ff88; box-shadow:0 0 15px #00ff88; cursor:pointer;}
-.label { position:absolute; color:#00ff88; font-size:12px; text-shadow:0 0 5px #00ff88; pointer-events:none; }
-.line-to-earth, .projection { position:absolute; width:1px; background:rgba(0,255,0,0.3); pointer-events:none; transform-origin:top left; animation:pulse 1s infinite;}
-@keyframes pulse{0%,100%{opacity:0.3;}50%{opacity:1;}}
-.orbit { position:absolute; border:1px dashed rgba(0,255,0,0.2); border-radius:50%; pointer-events:none; }
-
-.popup { position:absolute; background:rgba(0,0,0,0.8); color:#00ff00; padding:4px 6px; font-size:12px; border:1px solid #00ff00; border-radius:4px; pointer-events:none; display:none; }
+.satellite { position:absolute; width:8px; height:8px; border-radius:50%; background:#00ff88; box-shadow:0 0 10px #00ff88;}
+.label { position:absolute; font-size:10px; color:#00ff88;}
+.line-to-earth { position:absolute; width:1px; background:rgba(0,255,0,0.3); transform-origin:top left;}
 </style>
 </head>
+
 <body>
+
 <div id="terminal"></div>
+
 <div id="map">
   <div id="earth"></div>
-  <div class="radar"></div>
-  <div class="radar" style="animation-duration:5s; opacity:0.15;"></div>
-  <div class="radar" style="animation-duration:7s; opacity:0.1;"></div>
 </div>
-<div id="popup" class="popup"></div>
 
 <script>
-// Terminal Simulation
-const terminal=document.getElementById("terminal");
-const commands=[{cmd:"ping satellite-node-7",output:`PING satellite-node-7 (192.168.${rand(255)}.${rand(255)}): 56 bytes
-64 bytes from satellite-node-7: icmp_seq=0 ttl=64 time=${rand(200)} ms`},
-{cmd:"ssh admin@orbital-relay",output:`Connecting to orbital-relay... Access granted.`},
-{cmd:"nmap -sS 10.0.0.0/24",output:`Scanning network... Host 10.0.0.${rand(255)} is up Port 22: OPEN`},
-{cmd:"top",output:`CPU: ${rand(100)}% MEM: ${rand(100)}% process_sat_control running`}];
+// ---------------- TERMINAL ----------------
+const terminal = document.getElementById("terminal");
+
+let systemState = "NORMAL";
+
 function rand(max){return Math.floor(Math.random()*max);}
-function typeLine(text,callback){let i=0; let line=document.createElement("div"); terminal.appendChild(line); function typing(){if(i<text.length){line.textContent+=text[i]; i++; setTimeout(typing,20);}else{if(callback)callback();}} typing();}
-function runCommand(){let c=commands[rand(commands.length)]; let cmdLine=document.createElement("div"); cmdLine.className="line"; cmdLine.textContent=c.cmd; terminal.appendChild(cmdLine); setTimeout(()=>{typeLine(c.output+"\n\n",()=>{terminal.scrollTop=terminal.scrollHeight; setTimeout(runCommand,800);});},300);}
-runCommand();
-setInterval(()=>{if(Math.random()>0.7){let alert=document.createElement("div"); alert.textContent="!!! ALERT: SIGNAL INTERCEPTION DETECTED !!!"; terminal.appendChild(alert);}},4000);
 
-// Satellites with live tracking
-const map=document.getElementById("map");
-const popup=document.getElementById("popup");
-const satellitesData=[
-{name:"HUBBLE",radius:200,speed:0.0025},
-{name:"ISS",radius:250,speed:0.003},
-{name:"JWST",radius:300,speed:0.0018},
-{name:"GPS-ALPHA",radius:220,speed:0.0028},
-{name:"POLAR-X",radius:270,speed:0.0022},
-{name:"ORBIT-X",radius:230,speed:0.0027}
-];
-const trackedLines=[];
-
-satellitesData.forEach(data=>{
-  const sat=document.createElement("div"); sat.className="satellite"; map.appendChild(sat);
-  const label=document.createElement("div"); label.className="label"; map.appendChild(label);
-  const lineToEarth=document.createElement("div"); lineToEarth.className="line-to-earth"; map.appendChild(lineToEarth);
-  const orbit=document.createElement("div"); orbit.className="orbit"; orbit.style.width=(data.radius*2)+"px"; orbit.style.height=(data.radius*2)+"px";
-  orbit.style.left=(map.offsetWidth/2-data.radius)+"px"; orbit.style.top=(map.offsetHeight/2-data.radius)+"px"; map.appendChild(orbit);
-
-  let angle=Math.random()*Math.PI*2;
-  let signalPhase=Math.random()*Math.PI*2;
-  let velPhase=Math.random()*Math.PI*2;
-
-  // hover popup
-  sat.addEventListener("mousemove",(e)=>{
-    popup.style.left=(e.pageX+10)+"px"; popup.style.top=(e.pageY+10)+"px";
-    let signal=Math.floor(50+50*Math.sin(signalPhase+Date.now()/1000));
-    let vel=(7 + 1*Math.sin(velPhase+Date.now()/500)).toFixed(2);
-    popup.innerHTML=`${data.name}<br>Signal: ${signal}%<br>Velocity: ${vel} km/s`;
-    popup.style.display="block";
-  });
-  sat.addEventListener("mouseout",()=>{popup.style.display="none";});
-
-  // click to track satellite
-  sat.addEventListener("click",()=>{
-    const projection=document.createElement("div"); projection.className="projection"; map.appendChild(projection);
-    trackedLines.push({projection:projection,sat:sat,angleOffset:0});
-  });
-
-  function move(){
-    angle+=data.speed;
-    let x=map.offsetWidth/2+Math.cos(angle)*data.radius;
-    let y=map.offsetHeight/2+Math.sin(angle)*data.radius;
-    sat.style.left=x+"px"; sat.style.top=y+"px";
-    let signal=Math.floor(50+50*Math.sin(signalPhase+Date.now()/1000));
-    let vel=(7 + 1*Math.sin(velPhase+Date.now()/500)).toFixed(2);
-    label.style.left=(x+12)+"px"; label.style.top=(y-5)+"px";
-    label.textContent=`${data.name} | Sig:${signal}% | ${vel} km/s`;
-    lineToEarth.style.left=x+"px"; lineToEarth.style.top=y+"px";
-    let dx=map.offsetWidth/2-x; let dy=map.offsetHeight/2-y;
-    lineToEarth.style.height=Math.sqrt(dx*dx+dy*dy)+"px";
-    lineToEarth.style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;
-    requestAnimationFrame(move);
-  }
-  move();
-});
-
-// update tracked projections
-function updateTrackedLines(){
-  trackedLines.forEach(obj=>{
-    const rect=obj.sat.getBoundingClientRect();
-    const x=rect.left+rect.width/2-map.getBoundingClientRect().left;
-    const y=rect.top+rect.height/2-map.getBoundingClientRect().top;
-    const projectionLength=150; // projection distance
-    const angle=Math.random()*Math.PI*2; // simple demo of orbital projection
-    const px=x+projectionLength*Math.cos(angle);
-    const py=y+projectionLength*Math.sin(angle);
-    const dx=px-x; const dy=py-y;
-    obj.projection.style.left=x+"px"; obj.projection.style.top=y+"px";
-    obj.projection.style.height=Math.sqrt(dx*dx+dy*dy)+"px";
-    obj.projection.style.transform=`rotate(${Math.atan2(dy,dx)}rad)`;
-  });
-  requestAnimationFrame(updateTrackedLines);
+function log(text, color="#00ff00"){
+  let div=document.createElement("div");
+  div.style.color=color;
+  div.textContent=text;
+  terminal.appendChild(div);
+  terminal.scrollTop=terminal.scrollHeight;
 }
-updateTrackedLines();
+
+function commandLoop(){
+  let cpu = rand(40)+(systemState==="CRITICAL"?50:10);
+
+  let cmds = [
+    `top → CPU:${cpu}% STATE:${systemState}`,
+    `ping sat-node → ${rand(200)} ms`,
+    `ssh relay → ${systemState==="CRITICAL"?"DELAY":"OK"}`,
+    `scan net → host 10.0.0.${rand(255)} open`
+  ];
+
+  log("root@ksc:~$ "+cmds[rand(cmds.length)]);
+  setTimeout(commandLoop, 700);
+}
+
+setInterval(()=>{
+  let r=Math.random();
+  if(r>0.85){
+    systemState="CRITICAL";
+    log("!!! CRITICAL SIGNAL BREACH !!!","#ff4444");
+  } else if(r>0.65){
+    systemState="WARNING";
+    log("!! LINK UNSTABLE !!","#ffaa00");
+  } else {
+    systemState="NORMAL";
+  }
+},5000);
+
+commandLoop();
+
+
+// ---------------- SATELLITES ----------------
+
+const map = document.getElementById("map");
+
+let sats = [];
+
+async function loadSatellites(){
+  let res = await fetch("https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json");
+  let data = await res.json();
+
+  // vælg kun nogle få (performance)
+  data.slice(0, 25).forEach(sat=>{
+    let satrec = satellite.twoline2satrec(sat.TLE_LINE1, sat.TLE_LINE2);
+
+    let el = document.createElement("div");
+    el.className="satellite";
+    map.appendChild(el);
+
+    let label = document.createElement("div");
+    label.className="label";
+    map.appendChild(label);
+
+    sats.push({satrec, el, label, name:sat.OBJECT_NAME});
+  });
+}
+
+function updateSatellites(){
+  let now = new Date();
+
+  sats.forEach(s=>{
+    let posVel = satellite.propagate(s.satrec, now);
+    if(!posVel.position) return;
+
+    let gmst = satellite.gstime(now);
+    let geo = satellite.eciToGeodetic(posVel.position, gmst);
+
+    let lat = satellite.degreesLat(geo.latitude);
+    let lon = satellite.degreesLong(geo.longitude);
+
+    // map til skærm
+    let x = (lon + 180) / 360 * map.offsetWidth;
+    let y = (90 - lat) / 180 * map.offsetHeight;
+
+    s.el.style.left = x + "px";
+    s.el.style.top = y + "px";
+
+    s.label.style.left = (x+10)+"px";
+    s.label.style.top = y+"px";
+    s.label.textContent = s.name;
+  });
+
+  requestAnimationFrame(updateSatellites);
+}
+
+loadSatellites().then(updateSatellites);
+
 </script>
 </body>
 </html>
