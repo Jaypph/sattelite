@@ -2,7 +2,7 @@
 <html lang="da">
 <head>
 <meta charset="UTF-8">
-<title>Skolefest 2026</title>
+<title>KSC Mission Control - Satellit Speed Graph</title>
 <style>
 body { margin:0; background:black; font-family:"Courier New",monospace; display:flex; height:100vh; overflow:hidden;}
 #terminal { width:40%; padding:20px; overflow-y:auto; font-size:14px; color:#00ff00; border-right:2px solid #00ff00;}
@@ -13,6 +13,7 @@ body { margin:0; background:black; font-family:"Courier New",monospace; display:
 
 .satellite { position:absolute; width:8px; height:8px; border-radius:50%; background:#00ff88; box-shadow:0 0 10px #00ff88; z-index:10; }
 .label { position:absolute; font-size:10px; color:#00ff88; z-index:10; }
+.speed-bar { position:absolute; height:4px; background:#ffaa00; z-index:11; border-radius:2px; }
 </style>
 </head>
 <body>
@@ -58,11 +59,16 @@ let sats=[];
 function createSatellite(name){
   let el=document.createElement("div"); el.className="satellite"; map.appendChild(el);
   let label=document.createElement("div"); label.className="label"; map.appendChild(label);
+  let speedBar=document.createElement("div"); speedBar.className="speed-bar"; map.appendChild(speedBar);
 
-  // giv satellitten en random fart i km/s (realistisk for LEO: 7-8 km/s)
-  let speed = 7 + Math.random(); 
+  let speed = 7 + Math.random(); // km/s
 
-  return {el,label,name,angle:Math.random()*Math.PI*2,speedOrbit:0.002+Math.random()*0.003,speedKm:speed};
+  return {
+    el,label,speedBar,name,
+    angle:Math.random()*Math.PI*2,
+    speedOrbit:0.002+Math.random()*0.003,
+    speedKm:speed
+  };
 }
 
 // Load demo satellites
@@ -72,36 +78,41 @@ function loadDemoSatellites(){
   updateSatellites();
 }
 
-// Bevæg satellitter
+// Update satellites and speed bars
 function updateSatellites(){
   const centerX=map.offsetWidth/2;
   const centerY=map.offsetHeight/2;
 
   sats.forEach(s=>{
-    s.angle+=s.speedOrbit;
-
+    // Orbit movement
+    s.angle += s.speedOrbit;
     let radius = 180 + Math.sin(s.angle*2)*30;
     let x = centerX + Math.cos(s.angle)*radius;
     let y = centerY + Math.sin(s.angle)*radius;
-
     s.el.style.left = x+"px";
     s.el.style.top = y+"px";
 
+    // Update label with speed
     s.label.style.left = (x+10)+"px";
-    s.label.style.top = y+"px";
-    // Vis navnet + fart i km/s
+    s.label.style.top = (y-5)+"px";
     s.label.textContent = `${s.name} | ${s.speedKm.toFixed(2)} km/s`;
 
-    // let fart svinge lidt for realisme
+    // Update speed slightly for realism
     s.speedKm += (Math.random()-0.5)*0.02;
     if(s.speedKm<6.9) s.speedKm=6.9;
     if(s.speedKm>8) s.speedKm=8;
+
+    // Draw speed bar above satellite (scale: 6.9-8 km/s → 0-50px)
+    let barLength = ((s.speedKm-6.9)/(8-6.9))*50;
+    s.speedBar.style.left = x+"px";
+    s.speedBar.style.top = (y-10)+"px";
+    s.speedBar.style.width = barLength+"px";
   });
 
   requestAnimationFrame(updateSatellites);
 }
 
-// Start
+// Start demo
 loadDemoSatellites();
 </script>
 </body>
